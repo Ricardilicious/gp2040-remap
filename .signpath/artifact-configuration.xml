@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for GP2040 Remap.
+  Paste this into your SignPath project (Artifact configurations) once the
+  project is approved. The GitHub build uploads one artifact that contains
+  "GP2040 Remap.exe"; SignPath signs it and the build downloads it again.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="GP2040 Remap.exe" product-name="GP2040 Remap">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

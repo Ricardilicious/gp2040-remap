@@ -1,0 +1,106 @@
+GP2040 Remap - easy button remapping for GP2040-CE controllers
+================================================================
+
+How to use
+1. Unplug your controller.
+2. Hold Start (S2) and plug it into your PC. It starts in setup mode.
+3. Open "GP2040 Remap.exe". It finds the controller by itself.
+4. Click a button on the picture, then press the real button you want it to be.
+   If that button already did something, the two swap.
+5. Press "Save to controller", then "Finish and use controller".
+
+Find out what a button is (auto-detect)
+- While nothing else is going on, the app listens for presses. Press any
+  button on your controller and it shows its GPIO pin and what it does,
+  and that button glows green on the picture.
+- To change it, click what it should be on the picture, or pick from the
+  list on the right (open "More functions" for extras). If the new job was
+  on another button, the two swap.
+- Unused buttons show as "doesn't do anything yet", so you can find them
+  and give them a job.
+- Turn it off with the "Auto-detect button presses" checkbox if you like.
+
+Two buttons that do the same thing (e.g. two Up buttons)
+- Tick "Let two buttons do the same thing" on the right (or pick
+  "Keep both" when you're changing a button).
+- Click Up on the picture and press your second Up button. Both GPIO pins
+  are now Up, and a second Up appears on the picture showing its own GPIO.
+  Drag it where it really is in Arrange picture.
+- Or in Arrange picture, click a button and press "Add another ..." to put
+  a copy on the picture, then click the copy and press its real button.
+- To stop one of them being Up, click Up and press "Remove GPIO ...".
+- With "Swap" (the default), giving a job to a new button moves it off the
+  old one, and the old one takes the new button's previous job.
+
+Make the picture look like your controller
+- Press "Arrange picture" (above the picture).
+- Drag buttons to where they are on your controller. Click one to make it
+  bigger or smaller, or to take it off the picture. Add missing ones from
+  the list on the right. On the fightstick picture, the lever can be moved
+  too (hold Shift to move it without its four directions).
+- Arrow keys nudge the selected button; Shift + arrow moves it further.
+- Press "Done arranging". This only changes the drawing, never the controller.
+
+Add more buttons
+- In "Arrange picture", open "Add more buttons" on the right. You can add
+  anything a GP2040-CE button can do:
+  - Extra buttons: A3, A4, Extra 1-12
+  - Second set of directions (dual directional input)
+  - Mode switches: D-pad / left stick / right stick mode, SOCD modes,
+    4-way / 8-way, Focus mode, Reverse input
+  - Macros: Macro, Macro 1-6
+- Then press "Done arranging", click the new button on the picture and
+  press the real button you want for it. Press Save to controller.
+- Macros and mode switches only do something if that feature is set up
+  in GP2040-CE's own settings (for example, the macro itself).
+
+My pads (save several controllers)
+- Press "My pads" to open the gallery.
+- "Save current pad" keeps the picture and the buttons shown right now
+  under a name. "Start a new pad" begins from a fresh leverless or
+  fightstick picture.
+- Use: switch the picture to that pad.
+- Load its buttons: put that pad's button setup on the plugged-in
+  controller (then press Save to controller).
+- "Update this pad's buttons" (above the picture) stores your latest
+  buttons in the pad you're using.
+- Rename, Duplicate and Delete are on each pad. Deleting a pad never
+  changes your controller.
+
+Share a pad with a friend
+- In My pads, press "Share" on a pad. It saves a .gp2040pad file in
+  Documents\GP2040 Remap pads and opens that folder.
+- Send the file (Discord, USB stick, anything).
+- Your friend opens My pads and presses "Import pad", or drops the file
+  onto the gallery. They get your picture and button setup.
+- Button setups use GPIO pin numbers, so they fit controllers with the
+  same board and wiring. The app warns if the board is different.
+
+Other things it can do
+- Guided setup: press every button in order to set up a whole new layout.
+- Test buttons: press buttons and watch them light up on the picture.
+- Names: show buttons as Xbox, PlayStation, Switch, Arcade or GP2040 names.
+- Backups: your old layout is saved automatically before the first save,
+  in Documents\GP2040 Remap backups. You can load one back from the app.
+
+Try it without a controller
+Open "GP2040 Remap (demo).exe". It uses a pretend controller; click the
+GPIO buttons under the picture to pretend you pressed a real button.
+
+Notes
+- Needs Windows 10 or 11.
+- Windows may show a SmartScreen warning for a new download, even when
+  it's signed. Click "More info" then "Run anyway".
+- The app window opens through Microsoft Edge (built into Windows) in app
+  mode, so it looks like its own program. If Edge isn't there it uses
+  Chrome, or your normal browser.
+- If an antivirus flags it, that's a false positive for a new program.
+  You can report it to Microsoft at
+  https://www.microsoft.com/en-us/wdsi/filesubmission (choose
+  "Incorrectly detected as malware").
+- If Windows still shows an old icon, that's its icon cache; it updates
+  after moving the file or restarting Explorer.
+- This changes Profile 1 (the main button layout). Add-on pins (LEDs,
+  screens, etc.) are never touched.
+- Built for current GP2040-CE firmware (October 2026). Very old firmware
+  without the "press to assign" pin mapping feature may not work.
