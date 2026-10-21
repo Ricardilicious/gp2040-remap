@@ -1,0 +1,7 @@
+dist/
+out/
+pkg/
+signed/
+*.syso
+*.exe
+*.zip

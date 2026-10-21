@@ -1,0 +1,121 @@
+name: Build
+
+# Builds GP2040 Remap for Windows on GitHub's servers.
+#  - Every push to main: builds and keeps the zip as a workflow artifact.
+#  - A tag like v1.0.0: builds, signs (once SignPath is set up) and publishes a GitHub release.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish releases on tags
+
+env:
+  # Filled in after SignPath approves the project (see README, "Code signing").
+  # Signing is skipped until the secret exists, so the build works before that.
+  SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+  SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+  SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG || 'gp2040-remap' }}
+  SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Work out the version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            V="${GITHUB_REF_NAME#v}"
+            NUM="$(echo "$V" | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+).*/\1.\2.\3.0/')"
+          else
+            V="0.0.${GITHUB_RUN_NUMBER}-dev"
+            NUM="0.0.${GITHUB_RUN_NUMBER}.0"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "numeric=$NUM" >> "$GITHUB_OUTPUT"
+          echo "Building version $V ($NUM)"
+
+      - name: Check the code
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "Run gofmt"; exit 1; }
+          go vet ./...
+          GOOS=windows go vet ./...
+
+      - name: Add icon, version details and manifest
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3
+          go-winres make --in winres/winres.json --arch amd64 \
+            --product-version "${{ steps.ver.outputs.numeric }}" \
+            --file-version "${{ steps.ver.outputs.numeric }}" \
+            --out rsrc
+
+      - name: Build GP2040 Remap.exe
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p out
+          go build -trimpath -ldflags "-H windowsgui -X main.version=${{ steps.ver.outputs.version }}" \
+            -o "out/GP2040 Remap.exe" .
+
+      - name: Upload unsigned exe
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: out/GP2040 Remap.exe
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != '' && github.event_name != 'pull_request'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ env.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: "3600"
+          output-artifact-directory: signed
+
+      - name: Package the zip
+        run: |
+          EXE="out/GP2040 Remap.exe"
+          if [ -f "signed/GP2040 Remap.exe" ]; then EXE="signed/GP2040 Remap.exe"; echo "Using signed exe"; else echo "Using unsigned exe"; fi
+          mkdir -p "pkg/GP2040 Remap"
+          cp "$EXE" "pkg/GP2040 Remap/GP2040 Remap.exe"
+          cp "$EXE" "pkg/GP2040 Remap/GP2040 Remap (demo).exe"
+          cp "docs/READ ME.txt" "pkg/GP2040 Remap/READ ME.txt"
+          cp LICENSE "pkg/GP2040 Remap/LICENSE.txt"
+          (cd pkg && zip -qr "../GP2040-Remap-${{ steps.ver.outputs.version }}-Windows.zip" "GP2040 Remap")
+          sha256sum GP2040-Remap-*-Windows.zip | tee SHA256SUMS.txt
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: GP2040-Remap-${{ steps.ver.outputs.version }}-Windows
+          path: |
+            GP2040-Remap-*-Windows.zip
+            SHA256SUMS.txt
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: GP2040 Remap ${{ steps.ver.outputs.version }}
+          files: |
+            GP2040-Remap-*-Windows.zip
+            SHA256SUMS.txt
+          generate_release_notes: true

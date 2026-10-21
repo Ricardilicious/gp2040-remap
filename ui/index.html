@@ -1,0 +1,1501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GP2040 Remap</title>
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+:root {
+  --bg: #DCE0E5;
+  --surface: #EEF0F2;
+  --ink: #1C232B;
+  --ink-soft: #56616D;
+  --line: #C3C9D0;
+  --panel: #2E3A46;
+  --panel-edge: #1F2832;
+  --panel-ink: #9FB0C1;
+  --cap: #F1EFE8;
+  --cap-ink: #1C232B;
+  --dir: #3B78C4;
+  --hot: #F2C230;
+  --ok: #2F8F5B;
+  --bad: #C2412D;
+  --font: Bahnschrift, "DIN Alternate", "DIN 2014", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161B21; --surface: #20272F; --ink: #E4E8EC; --ink-soft: #98A3AE; --line: #34404C;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.45 var(--font);
+  display: grid; grid-template-rows: auto 1fr auto; min-height: 100vh;
+}
+button, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--hot); outline-offset: 2px; }
+
+/* ---------- top bar ---------- */
+header {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 20px; border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; font-size: 19px; letter-spacing: .01em; font-stretch: condensed; }
+.status { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 14px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); flex: none; }
+.status.on .dot { background: var(--ok); }
+.spacer { flex: 1; }
+.seg { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.seg-btns { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg-btns button {
+  border: 0; background: none; padding: 6px 10px; cursor: pointer; color: var(--ink);
+  border-right: 1px solid var(--line);
+}
+.seg-btns button:last-child { border-right: 0; }
+.seg-btns button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+/* ---------- main ---------- */
+main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; }
+.stage { padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+#panel { width: 100%; max-height: calc(100vh - 230px); display: block; }
+.toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; color: var(--ink-soft); font-size: 14px; }
+.side {
+  border-left: 1px solid var(--line); background: var(--surface);
+  padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px;
+}
+.side h2 { font-size: 22px; margin: 0; font-weight: 700; font-stretch: condensed; line-height: 1.15; }
+.side p { margin: 0; color: var(--ink-soft); }
+.side .big { font-size: 17px; color: var(--ink); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 8px;
+  padding: 8px 14px; cursor: pointer; font-weight: 600;
+}
+.btn:hover { border-color: var(--ink-soft); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.primary:disabled { opacity: .35; cursor: default; }
+.btn.quiet { background: none; border-color: transparent; color: var(--ink-soft); padding-left: 4px; padding-right: 4px; }
+.btn.quiet:hover { color: var(--ink); }
+
+.listen {
+  border: 2px solid var(--hot); border-radius: 12px; padding: 16px;
+  display: grid; gap: 10px; background: color-mix(in srgb, var(--hot) 10%, transparent);
+}
+.listen .prompt { font-size: 20px; font-weight: 700; font-stretch: condensed; line-height: 1.2; }
+.progress { font-size: 13px; color: var(--ink-soft); }
+
+details.wiring summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.pins { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; margin-top: 8px; font-size: 14px; }
+.pins .g { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pins select { width: 100%; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
+.pins .changed { box-shadow: inset 3px 0 0 var(--hot); }
+.more { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+.more h3 { margin: 0; font-size: 17px; font-stretch: condensed; }
+.addgroup summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.addgroup .actions { margin: 6px 0 4px; gap: 6px; }
+.addgroup .btn { padding: 5px 9px; font-size: 14px; font-weight: 500; }
+.detecting { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px;
+  background: color-mix(in srgb, var(--ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); }
+.live { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); margin-top: 6px; flex: none; animation: pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .live { animation: none; } }
+.toggle { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink-soft); cursor: pointer; }
+.multi { display: grid; gap: 6px; font-size: 14px; }
+.multi label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.multi input { margin-top: 3px; accent-color: var(--ink); }
+.pinchips { gap: 0 8px; }
+.pinchips .btn { padding: 2px 4px; font-size: 13px; }
+.toggle input { width: 16px; height: 16px; accent-color: var(--ink); }
+.choices .btn, .addgroup .btn { padding: 5px 9px; font-size: 14px; font-weight: 500; }
+.btn.current { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.cap.detected .ring { fill: var(--ok); }
+.cap.detected .face { stroke: var(--ok); stroke-width: 4; }
+.pins .locked { color: var(--ink-soft); font-size: 13px; }
+
+/* ---------- controller panel (SVG) ---------- */
+.plate { fill: var(--panel); stroke: var(--panel-edge); stroke-width: 6; }
+.screw { fill: var(--panel-edge); }
+.etch { fill: var(--panel-ink); font: 600 15px var(--font); letter-spacing: .02em; }
+.cap { cursor: pointer; }
+.cap .ring { fill: var(--panel-edge); }
+.cap .face { fill: var(--cap); stroke: rgba(0,0,0,.25); stroke-width: 2; transition: fill .12s; }
+.cap.dir .face { fill: var(--dir); }
+.cap .lbl { fill: var(--cap-ink); font: 700 20px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cap.dir .lbl { fill: #fff; }
+.cap .gp { fill: var(--panel-ink); font: 13px var(--font); text-anchor: middle; pointer-events: none; }
+.cap.unset .face { fill: transparent; stroke: var(--panel-ink); stroke-dasharray: 6 5; }
+.cap.unset .lbl { fill: var(--panel-ink); }
+.cap:hover .ring, .cap:focus-visible .ring { fill: var(--hot); }
+#panel .cap:focus, #panel .lever:focus { outline: none; }
+.cap.sel .ring { fill: var(--hot); }
+.cap.sel .face { stroke: var(--hot); stroke-width: 4; }
+.cap.listening .ring { animation: pulse 1s ease-in-out infinite; fill: var(--hot); }
+.cap.flash .face { fill: var(--hot); }
+.cap.flash .lbl { fill: var(--cap-ink); }
+.cap .tick { fill: var(--ok); stroke: var(--panel); stroke-width: 3; display: none; }
+.cap.tested .tick { display: inline; }
+.lever-ball { fill: #C7362B; stroke: rgba(0,0,0,.3); stroke-width: 3; }
+.lever-gate { fill: none; stroke: var(--panel-edge); stroke-width: 10; }
+#panel.editing .plate { stroke: var(--hot); stroke-dasharray: 14 10; }
+#panel.editing .cap, #panel.editing .lever { cursor: grab; touch-action: none; }
+#panel.editing .cap:active, #panel.editing .lever:active { cursor: grabbing; }
+.cap.picked .ring { fill: var(--hot); }
+.lever.picked .lever-gate, .lever:focus-visible .lever-gate { stroke: var(--hot); }
+.lever:focus-visible { outline: none; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .cap.listening .ring { animation: none; } .cap .face { transition: none; } }
+
+/* demo wiring strip */
+.demo {
+  border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px;
+  display: grid; gap: 8px; font-size: 13px; color: var(--ink-soft);
+}
+.demo .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.demo button { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 13px; }
+.demo button:active { background: var(--hot); }
+
+/* offline / connect screen */
+.connect {
+  grid-column: 1 / -1; display: grid; place-items: center; padding: 40px 20px;
+}
+.connect-card { max-width: 560px; display: grid; gap: 18px; }
+.connect-card h1 { font-size: 34px; line-height: 1.1; margin: 0; font-stretch: condensed; }
+.connect-card ol { margin: 0; padding-left: 22px; display: grid; gap: 10px; font-size: 17px; }
+.connect-card .hint { color: var(--ink-soft); font-size: 14px; }
+.waiting { display: flex; gap: 10px; align-items: center; color: var(--ink-soft); }
+.spinner { width: 16px; height: 16px; border: 3px solid var(--line); border-top-color: var(--ink); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+/* bottom bar */
+footer {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 20px; border-top: 1px solid var(--line); background: var(--surface);
+}
+footer[hidden] { display: none; }
+.changes { color: var(--ink-soft); }
+.changes b { color: var(--ink); }
+
+/* toast + dialog */
+#toast {
+  position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px;
+  max-width: min(560px, 90vw); box-shadow: 0 6px 24px rgba(0,0,0,.25); display: none; z-index: 9;
+}
+#toast.show { display: block; }
+#toast.bad { background: var(--bad); color: #fff; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); padding: 22px; max-width: 480px; width: 92vw; }
+dialog::backdrop { background: rgba(10,14,18,.45); }
+dialog h3 { margin: 0 0 8px; font-size: 21px; font-stretch: condensed; }
+.field { display: grid; gap: 6px; margin: 14px 0 18px; font-weight: 600; }
+.field input { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.toolbar .spacer { flex: 1; }
+.padname { font-size: 18px; color: var(--ink); font-stretch: condensed; }
+
+/* gallery */
+.gallery { grid-column: 1 / -1; padding: 24px; display: grid; gap: 20px; align-content: start; }
+.gallery-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.gallery-head h1 { margin: 0; font-size: 30px; font-stretch: condensed; line-height: 1.1; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: 16px; }
+.card {
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+  padding: 12px; display: grid; gap: 10px; align-content: start;
+}
+.card.active { border: 2px solid var(--hot); padding: 11px; }
+.card .thumb { width: 100%; display: block; border-radius: 8px; cursor: pointer; }
+.card h2 { margin: 0; font-size: 18px; font-stretch: condensed; overflow-wrap: anywhere; }
+.card .meta { font-size: 13px; color: var(--ink-soft); }
+.card .actions .btn { padding: 6px 10px; font-size: 14px; }
+.card .actions .btn.quiet { padding: 6px 5px; }
+.card .actions:last-child { gap: 2px 6px; }
+.badge { font-size: 12px; font-weight: 700; background: var(--hot); color: #1C232B; border-radius: 6px; padding: 1px 7px; margin-left: 6px; vertical-align: 2px; }
+.gallery.drop { outline: 3px dashed var(--hot); outline-offset: -10px; border-radius: 16px; }
+.card.new { border-style: dashed; background: none; place-content: center; text-align: center; min-height: 220px; }
+.card.new p { color: var(--ink-soft); margin: 0; }
+.thumb .t-plate { fill: var(--panel); }
+.thumb .t-cap { fill: var(--cap); }
+.thumb .t-dir { fill: var(--dir); }
+.thumb .t-gate { fill: none; stroke: var(--panel-edge); stroke-width: 12; }
+.thumb .t-ball { fill: #C7362B; }
+.bk-list { display: grid; gap: 6px; margin: 12px 0; max-height: 280px; overflow-y: auto; }
+.bk-list button { text-align: left; }
+
+@media (max-width: 860px) {
+  main { grid-template-columns: 1fr; }
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">GP2040 Remap</div>
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">Looking for your controller…</span></div>
+  <div class="spacer"></div>
+  <div class="seg"><span id="labelsCaption">Names</span>
+    <div class="seg-btns" id="labelBtns" role="group" aria-labelledby="labelsCaption"></div>
+  </div>
+  <div class="seg"><span id="layoutCaption">Layout</span>
+    <div class="seg-btns" id="layoutBtns" role="group" aria-labelledby="layoutCaption">
+      <button data-layout="leverless">Leverless</button>
+      <button data-layout="stick">Fightstick</button>
+    </div>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<footer id="footer" hidden>
+  <span class="changes" id="changes">No changes yet</span>
+  <button class="btn quiet" id="undoBtn" hidden>Undo all changes</button>
+  <div class="spacer"></div>
+  <button class="btn" id="backupsBtn">Backups</button>
+  <button class="btn" id="restartBtn" title="Leave setup mode and use the controller normally">Finish and use controller</button>
+  <button class="btn primary" id="saveBtn" disabled>Save to controller</button>
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="nameDlg">
+  <form method="dialog" id="nameForm">
+    <h3 id="nameTitle">Name this pad</h3>
+    <p id="nameHint"></p>
+    <label class="field"><span>Name</span><input id="nameInput" maxlength="40" required autocomplete="off"></label>
+    <div class="actions"><button class="btn primary" value="ok" id="nameOk">Save</button><button class="btn" value="cancel" formnovalidate>Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="backupDlg">
+  <h3>Backups</h3>
+  <p>A backup of your old layout is saved automatically the first time you save. Pick one to load it, then press Save to put it back on the controller.</p>
+  <div class="bk-list" id="bkList"></div>
+  <p class="progress" id="bkDir"></p>
+  <div class="actions"><button class="btn" id="bkClose">Close</button></div>
+</dialog>
+
+<script>
+"use strict";
+/* ================= GP2040-CE facts ================= */
+const ACT = { NONE: -10, RESERVED: -5, ADDON: 0,
+  Up: 1, Down: 2, Left: 3, Right: 4, B1: 5, B2: 6, B3: 7, B4: 8, L1: 9, R1: 10, L2: 11, R2: 12,
+  S1: 13, S2: 14, A1: 15, A2: 16, L3: 17, R3: 18, Fn: 19, Turbo: 32 };
+// Extra functions you can add to the picture: [id, full name, short label for the button, GP2040-CE action code]
+const EXTRA_GROUPS = [
+  ["Extra buttons", [["A3", "A3", "A3", 41], ["A4", "A4", "A4", 42],
+    ...Array.from({ length: 12 }, (_, i) => [`E${i + 1}`, `Extra ${i + 1}`, `E${i + 1}`, 43 + i])]],
+  ["Second set of directions", [["DDIUp", "2nd Up", "▲2", 20], ["DDIDown", "2nd Down", "▼2", 21],
+    ["DDILeft", "2nd Left", "◀2", 22], ["DDIRight", "2nd Right", "▶2", 23]]],
+  ["Mode switches", [["DpadMode", "D-pad mode: D-pad", "D-pad", 24], ["LSMode", "D-pad mode: Left stick", "LS mode", 25],
+    ["RSMode", "D-pad mode: Right stick", "RS mode", 26], ["SocdUp", "SOCD: up priority", "SOCD Up", 27],
+    ["SocdNeutral", "SOCD: neutral", "SOCD N", 28], ["SocdLast", "SOCD: last input wins", "SOCD Last", 29],
+    ["SocdFirst", "SOCD: first input wins", "SOCD 1st", 30], ["SocdOff", "SOCD: off", "SOCD Off", 31],
+    ["Way48", "4-way / 8-way switch", "4/8 way", 71], ["Focus", "Focus mode", "Focus", 70], ["Reverse", "Reverse input", "Reverse", 69]]],
+  ["Macros", [["Macro", "Macro", "Macro", 33], ...Array.from({ length: 6 }, (_, i) => [`Macro${i + 1}`, `Macro ${i + 1}`, `M${i + 1}`, 34 + i])]],
+];
+const EXTRA_NAME = {}, EXTRA_SHORT = {}, EXTRA_FNS = [];
+for (const [, list] of EXTRA_GROUPS) for (const [id, full, short, code] of list) {
+  ACT[id] = code; EXTRA_NAME[id] = full; EXTRA_SHORT[id] = short; EXTRA_FNS.push(id);
+}
+const CODE_TO_FN = Object.fromEntries(Object.entries(ACT).map(([k, v]) => [v, k]));
+const OTHER_ACTIONS = { 20: "Dual direction up", 21: "Dual direction down", 22: "Dual direction left", 23: "Dual direction right",
+  24: "D-pad mode: D-pad", 25: "D-pad mode: Left stick", 26: "D-pad mode: Right stick",
+  27: "SOCD: up priority", 28: "SOCD: neutral", 29: "SOCD: last input wins", 30: "SOCD: first input wins", 31: "SOCD: off",
+  33: "Macro", 34: "Macro 1", 35: "Macro 2", 36: "Macro 3", 37: "Macro 4", 38: "Macro 5", 39: "Macro 6",
+  40: "Custom combo", 41: "A3", 42: "A4", 69: "Reverse input", 70: "Focus mode", 71: "4/8-way toggle" };
+
+const LABELS = {
+  gp2040: { name: "GP2040", B1: "B1", B2: "B2", B3: "B3", B4: "B4", L1: "L1", R1: "R1", L2: "L2", R2: "R2", S1: "S1", S2: "S2", A1: "A1", A2: "A2", L3: "L3", R3: "R3" },
+  xinput: { name: "Xbox", B1: "A", B2: "B", B3: "X", B4: "Y", L1: "LB", R1: "RB", L2: "LT", R2: "RT", S1: "Back", S2: "Start", A1: "Guide", A2: "A2", L3: "LS", R3: "RS" },
+  ps:     { name: "PlayStation", B1: "Cross", B2: "Circle", B3: "Square", B4: "Triangle", L1: "L1", R1: "R1", L2: "L2", R2: "R2", S1: "Share", S2: "Options", A1: "PS", A2: "Touchpad", L3: "L3", R3: "R3" },
+  switch: { name: "Switch", B1: "B", B2: "A", B3: "Y", B4: "X", L1: "L", R1: "R", L2: "ZL", R2: "ZR", S1: "Minus", S2: "Plus", A1: "Home", A2: "Capture", L3: "LS", R3: "RS" },
+  arcade: { name: "Arcade", B1: "K1", B2: "K2", B3: "P1", B4: "P2", L1: "P4", R1: "P3", L2: "K4", R2: "K3", S1: "Select", S2: "Start", A1: "Home", A2: "A2", L3: "L3", R3: "R3" },
+};
+const DIR_TEXT = { Up: "Up", Down: "Down", Left: "Left", Right: "Right" };
+const ARROWS = { Up: "▲", Down: "▼", Left: "◀", Right: "▶" };
+function fnName(fn) {
+  if (DIR_TEXT[fn]) return DIR_TEXT[fn];
+  if (EXTRA_NAME[fn]) return EXTRA_NAME[fn];
+  if (fn === "Turbo") return "Turbo";
+  if (fn === "Fn") return "Function";
+  return LABELS[state.labels][fn] ?? fn;
+}
+function fnFullName(fn) {  // e.g. "Cross (B1)"
+  const n = fnName(fn);
+  return (n !== fn && /^[ABLRS][1-4]$/.test(fn)) ? `${n} (${fn})` : n;
+}
+function actionText(code) {
+  if (code === ACT.NONE) return "Not used";
+  if (code === ACT.RESERVED) return "Reserved";
+  if (code === ACT.ADDON) return "Used by an add-on";
+  const fn = CODE_TO_FN[code];
+  return fn ? fnFullName(fn) : (OTHER_ACTIONS[code] || `Other (${code})`);
+}
+
+/* ================= panel layouts (SVG coords 1000 × 560) ================= */
+const EIGHT = { B3: [540, 228], B4: [632, 198], R1: [726, 203], L1: [818, 230],
+                B1: [530, 350], B2: [622, 320], R2: [716, 325], L2: [808, 352] };
+const SMALL = ["S1", "S2", "A1", "A2", "L3", "R3", "Turbo", "Fn"];
+const MAIN_FNS = ["Up", "Down", "Left", "Right", "B1", "B2", "B3", "B4", "L1", "R1", "L2", "R2", ...SMALL];
+const ALL_FNS = [...MAIN_FNS, ...EXTRA_FNS];
+const SIZES = [["Small", 17], ["Medium", 28], ["Large", 38], ["Extra large", 46]];
+const PLATE = { x0: 34, y0: 34, x1: 966, y1: 526 };
+// A layout is { items: { fn: {x, y, r} }, lever: {x, y} | null }
+function defaultLayout(name) {
+  const items = {};
+  SMALL.forEach((fn, i) => items[fn] = { x: 170 + i * 92, y: 70, r: 17 });
+  for (const [fn, [x, y]] of Object.entries(EIGHT)) items[fn] = { x, y, r: 38 };
+  if (name === "stick") {
+    for (const [fn, [x, y]] of Object.entries({ Up: [240, 172], Down: [240, 408], Left: [122, 290], Right: [358, 290] })) items[fn] = { x, y, r: 28 };
+    return { items, lever: { x: 240, y: 290 } };
+  }
+  for (const [fn, [x, y]] of Object.entries({ Left: [150, 280], Down: [242, 252], Right: [334, 276], Up: [450, 455] })) items[fn] = { x, y, r: 38 };
+  return { items, lever: null };
+}
+const curLayout = () => activePad()?.layout || state.layouts[state.layout];
+const WIZARD_ORDER = {
+  leverless: ["Left", "Down", "Right", "Up", "B3", "B4", "R1", "L1", "B1", "B2", "R2", "L2", "S2", "S1", "A1", "A2", "L3", "R3", "Turbo"],
+  stick:     ["Up", "Down", "Left", "Right", "B3", "B4", "R1", "L1", "B1", "B2", "R2", "L2", "S2", "S1", "A1", "A2", "L3", "R3", "Turbo"],
+};
+const WIZARD_OPTIONAL = new Set(["A2", "L3", "R3", "Turbo", "Fn", ...EXTRA_FNS]);
+
+/* ================= state ================= */
+const state = {
+  info: { demo: false },
+  online: false, fw: null,
+  original: null, doc: null,       // pin mapping JSON from the controller (original = last saved)
+  labels: localGet("labels") || "xinput",
+  labelsChosen: !!localGet("labels"),
+  layout: localGet("layout") || "leverless",
+  layouts: { leverless: defaultLayout("leverless"), stick: defaultLayout("stick") },
+  pads: [],                        // saved pads: { id, name, base, layout, buttons, labels, board, updated }
+  activePad: localGet("activePad") || null,
+  view: "main",                    // main | gallery
+  autoDetect: localGet("autoDetect") !== "0",  // listen for presses while idle
+  multi: localGet("multi") === "add" ? "add" : "swap",  // job already on another button: swap or keep both
+  detect: null,                    // { n } the GPIO pin last pressed while auto-detecting
+  editing: false,                  // moving buttons around on the picture
+  editSel: null,                   // fn or "lever" picked while editing
+  mode: "idle",                    // idle | listen | wizard | test | saving
+  sel: null,                       // selected function
+  wizard: null,                    // { i, order, used:Set }
+  tested: new Set(),
+  backedUp: false,
+  listenCtl: null,
+};
+function localGet(k) { try { return localStorage.getItem("gp2040remap." + k); } catch { return null; } }
+function localSet(k, v) { try { localStorage.setItem("gp2040remap." + k, v); } catch {} }
+
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const svg = ["svg", "g", "circle", "rect", "text", "path", "line", "tspan"].includes(tag);
+  const n = svg ? document.createElementNS("http://www.w3.org/2000/svg", tag) : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (k === "text") n.textContent = v;
+    else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k.nodeType ? k : document.createTextNode(k));
+  return n;
+};
+
+/* ================= API ================= */
+async function api(path, { body, timeout = 4000, signal } = {}) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeout);
+  if (signal) signal.addEventListener("abort", () => ctl.abort(), { once: true });
+  try {
+    const r = await fetch("/api/" + path, {
+      method: body ? "POST" : "GET",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ctl.signal,
+    });
+    const text = await r.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+    if (!r.ok || data.offline) throw Object.assign(new Error(data.error || `HTTP ${r.status}`), { offline: !!data.offline || r.status === 502 });
+    return data;
+  } finally { clearTimeout(t); }
+}
+
+/* ================= pin helpers ================= */
+const pinKeys = () => Object.keys(state.doc).filter(k => /^pin\d\d$/.test(k)).sort();
+const pinNum = k => parseInt(k.slice(3), 10);
+const keyOf = n => "pin" + String(n).padStart(2, "0");
+const actionOf = (doc, k) => Number(doc[k]?.action ?? ACT.NONE);
+const locked = code => code === ACT.RESERVED || code === ACT.ADDON;
+function pinsFor(fn, doc = state.doc) { return pinKeys().filter(k => actionOf(doc, k) === ACT[fn]).map(pinNum); }
+function changedPins() { return state.original ? pinKeys().filter(k => actionOf(state.doc, k) !== actionOf(state.original, k)) : []; }
+const clone = o => JSON.parse(JSON.stringify(o));
+function setPin(n, entry) { state.doc[keyOf(n)] = { action: entry.action, customButtonMask: entry.customButtonMask || 0, customDpadMask: entry.customDpadMask || 0 }; }
+
+/* ---- picture buttons ("caps") ----
+   A picture key is a function name ("Up") or a copy of one ("Up~2"), so a
+   controller with two Up buttons can show both. A copy remembers which GPIO
+   it stands for in its `pin`; the main cap shows the function's other pins. */
+const fnOf = key => key.split("~")[0];
+const isCopy = key => key.includes("~");
+const validKey = key => /^[A-Za-z0-9]+(~\d{1,2})?$/.test(key) && ALL_FNS.includes(fnOf(key));
+function copyKeys(fn, L = curLayout()) { return Object.keys(L.items).filter(k => isCopy(k) && fnOf(k) === fn); }
+function orderedKeys(L = curLayout()) {
+  const out = [];
+  for (const fn of ALL_FNS) {
+    if (L.items[fn]) out.push(fn);
+    out.push(...copyKeys(fn, L).sort((a, b) => parseInt(a.split("~")[1]) - parseInt(b.split("~")[1])));
+  }
+  return out;
+}
+function capPins(key, L = curLayout()) {
+  if (!state.doc) return [];
+  const fn = fnOf(key), all = pinsFor(fn);
+  const copies = copyKeys(fn, L).sort((a, b) => parseInt(a.split("~")[1]) - parseInt(b.split("~")[1]));
+  const bound = new Map();
+  for (const c of copies) { const p = L.items[c].pin; if (all.includes(p) && ![...bound.values()].includes(p)) bound.set(c, p); }
+  // GPIOs no copy is tied to: the main button shows the first, copies without a GPIO take the next ones.
+  const free = all.filter(p => ![...bound.values()].includes(p));
+  let i = L.items[fn] ? 1 : 0;
+  for (const c of copies) if (!bound.has(c) && i < free.length) bound.set(c, free[i++]);
+  if (isCopy(key)) return bound.has(key) ? [bound.get(key)] : [];
+  const used = new Set(bound.values());
+  return all.filter(p => !used.has(p));
+}
+function capKeysForPin(n) { return orderedKeys().filter(k => capPins(k).includes(n)); }
+function capName(key) {
+  if (!isCopy(key)) return fnFullName(key);
+  const same = [fnOf(key), ...copyKeys(fnOf(key)).sort()].filter(k => curLayout().items[k]);
+  const i = same.indexOf(key);
+  return `${fnFullName(fnOf(key))} (button ${i >= 0 ? i + 1 : 2})`;
+}
+function bindCopy(key, n) {
+  const L = curLayout();
+  for (const k of copyKeys(fnOf(key), L)) if (k !== key && L.items[k].pin === n) delete L.items[k].pin;
+  L.items[key].pin = n; saveLayouts();
+}
+function newCopyKey(fn, L = curLayout()) { let i = 2; while (L.items[`${fn}~${i}`]) i++; return `${fn}~${i}`; }
+function capSize(fn) {
+  const group = EXTRA_GROUPS.find(([, list]) => list.some(e => e[0] === fn))?.[0];
+  return SMALL.includes(fn) || group === "Mode switches" || group === "Macros" ? 17 : group ? 28 : 38;
+}
+// Adds a picture button for `fn` (a copy if the main one is already there), optionally standing for GPIO `pin`.
+function addCap(fn, pin) {
+  const L = curLayout();
+  const key = L.items[fn] ? newCopyKey(fn, L) : fn;
+  const near = L.items[fn], r = near ? near.r : capSize(fn);
+  let spot = null;
+  if (near) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const x = near.x + dx * (2 * r + 30), y = near.y + dy * (2 * r + 40);
+    const taken = [...Object.values(L.items), ...(L.lever ? [{ ...L.lever, r: 70 }] : [])];
+    if (x > PLATE.x0 + r && x < PLATE.x1 - r && y > PLATE.y0 + r && y < PLATE.y1 - r - 24 &&
+        taken.every(t => Math.hypot(t.x - x, t.y - y) > t.r + r + 20)) { spot = [x, y]; break; }
+  }
+  const [x, y] = spot || freeSpot(r);
+  L.items[key] = { x, y, r };
+  placeItem(key, x, y);
+  if (Number.isInteger(pin) && isCopy(key)) bindCopy(key, pin);
+  saveLayouts();
+  return key;
+}
+
+/* Put picture button `key`'s job on GPIO `n`.
+   - A copy cap ("Up~2") is one physical button: it moves to GPIO n, and its old GPIO swaps jobs with n.
+   - The main cap follows `mode`: "swap" moves the job (the old button takes over n's old job),
+     "add" keeps the job where it is too, so two buttons do it (and adds a copy to the picture). */
+function assignToCap(key, n, mode = state.multi, { autoCopy = true } = {}) {
+  const fn = fnOf(key), k = keyOf(n), old = clone(state.doc[k] || { action: ACT.NONE });
+  if (locked(old.action)) return { ok: false, msg: `GPIO ${n} is used by an add-on (LEDs, display, etc.), so it can't be a button. Try a different button.` };
+  const name = fnName(fn), own = capPins(key).filter(p => p !== n);
+  if (old.action === ACT[fn]) {
+    if (isCopy(key) && curLayout().items[key]) { bindCopy(key, n); return { ok: true, msg: `This picture button is now GPIO ${n} (${name}).` }; }
+    return { ok: true, msg: `That button is already ${name}.` };
+  }
+  const oldFn = CODE_TO_FN[old.action];
+  setPin(n, { action: ACT[fn] });
+  let msg;
+  if (isCopy(key) || mode !== "add") {
+    if (isCopy(key) && curLayout().items[key]) bindCopy(key, n);
+    if (own.length === 1) {
+      setPin(own[0], old);
+      msg = old.action === ACT.NONE
+        ? `GPIO ${n} is now ${name}. The button that used to be ${name} (GPIO ${own[0]}) now does nothing.`
+        : `Swapped: GPIO ${n} is now ${name}, and GPIO ${own[0]} is now ${actionText(old.action)}.`;
+    } else msg = `GPIO ${n} is now ${name}${old.action !== ACT.NONE ? ` (it was ${actionText(old.action)})` : ""}.`;
+  } else {
+    const all = pinsFor(fn);
+    msg = all.length > 1 ? `GPIO ${n} is now ${name} too, so ${name} is on GPIO ${all.join(" and ")}.` : `GPIO ${n} is now ${name}.`;
+    const L = curLayout();
+    if (all.length > 1 && autoCopy && L.items[fn] && !capKeysForPin(n).some(isCopy)) {
+      addCap(fn, n);
+      msg += ` A second ${name} is on the picture; drag it where it really is.`;
+    }
+  }
+  if (oldFn && ACT[oldFn] > 0 && !pinsFor(oldFn).length) msg += ` ${fnName(oldFn)} isn't on any button now.`;
+  return { ok: true, msg };
+}
+function assign(fn, n) { return assignToCap(fn, n); }
+function setMulti(m) { state.multi = m; localSet("multi", m); render(); }
+function multiChoice(fn) {
+  const pins = fn ? pinsFor(fn) : [], name = fn ? fnName(fn) : "";
+  const on = pins.length === 1 ? `GPIO ${pins[0]}` : pins.length ? `GPIO ${pins.join(" and ")}` : "";
+  const swapText = fn ? ` – move ${name} off ${on}` : " – the other button gets this one's old job";
+  const keepText = fn ? ` – ${on} ${pins.length > 1 ? "stay" : "stays"} ${name} too` : " – both buttons do that job";
+  return el("div", { class: "multi", role: "radiogroup", "aria-label": fn ? `If ${name} is already on a button` : "If that job is already on another button" },
+    el("label", {}, el("input", { type: "radio", name: "multi", checked: state.multi === "swap", onchange: () => setMulti("swap") }),
+      el("span", {}, el("b", { text: "Swap" }), swapText)),
+    el("label", {}, el("input", { type: "radio", name: "multi", checked: state.multi === "add", onchange: () => setMulti("add") }),
+      el("span", {}, el("b", { text: "Keep both" }), keepText)));
+}
+function removePinFrom(fn, p) {
+  setPin(p, { action: ACT.NONE });
+  const L = curLayout();
+  for (const k of copyKeys(fn, L)) if (L.items[k].pin === p) delete L.items[k];
+  saveLayouts();
+  toast(`GPIO ${p} is no longer ${fnName(fn)}.`);
+}
+
+/* ================= listening for a physical press ================= */
+async function waitForPress() {
+  const ctl = new AbortController();
+  state.listenCtl = ctl;
+  try {
+    while (!ctl.signal.aborted) {
+      let res;
+      try { res = await api("getHeldPins", { timeout: 9000, signal: ctl.signal }); }
+      catch (e) {
+        if (ctl.signal.aborted) return null;
+        if (e.offline) { goOffline(); return null; }
+        await sleep(400); continue;
+      }
+      const pins = res.heldPins || [];
+      if (pins.length) return pins;
+    }
+    return null;
+  } finally { if (state.listenCtl === ctl) state.listenCtl = null; }
+}
+function stopListening() {
+  if (state.listenCtl) {
+    state.listenCtl.abort();
+    state.listenCtl = null;
+    api("abortGetHeldPins", { timeout: 2000 }).catch(() => {});
+  }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function startListen(key) {
+  state.detect = null;
+  stopListening();
+  state.mode = "listen"; state.sel = key; render();
+  const pins = await waitForPress();
+  if (state.mode !== "listen" || state.sel !== key) return;
+  state.mode = "idle"; state.sel = null;
+  if (pins) {
+    const r = assignToCap(key, pins[0]);
+    toast(r.msg + (pins.length > 1 ? " (More than one button was held; I used the first.)" : ""), !r.ok);
+    render();
+    if (r.ok) flashPin(pins[0]);
+    return;
+  }
+  render();
+}
+
+/* ================= guided setup ================= */
+function startWizard() {
+  state.detect = null;
+  stopListening();
+  const L = curLayout(), onPic = L.items;
+  const base = WIZARD_ORDER[activePad()?.base || state.layout];
+  const has = fn => onPic[fn] || copyKeys(fn, L).length;
+  const fnOrder = [...base.filter(has), ...ALL_FNS.filter(fn => has(fn) && !base.includes(fn))];
+  const order = fnOrder.flatMap(fn => [...(onPic[fn] ? [fn] : []), ...copyKeys(fn, L).sort()]);
+  // Clear every button on the picture so each one is set fresh by pressing it.
+  const asking = new Set(order.map(fnOf));
+  for (const k of pinKeys()) {
+    const fn = CODE_TO_FN[actionOf(state.doc, k)];
+    if (fn && asking.has(fn)) setPin(pinNum(k), { action: ACT.NONE });
+  }
+  state.wizard = { i: 0, order, used: new Map() };
+  state.mode = "wizard";
+  wizardStep();
+}
+async function wizardStep() {
+  const w = state.wizard;
+  if (!w) return;
+  if (w.i >= w.order.length) return finishWizard();
+  const key = w.order[w.i];
+  state.sel = key; render();
+  const pins = await waitForPress();
+  if (state.mode !== "wizard" || state.wizard !== w || w.order[w.i] !== key) return;
+  if (!pins) return;
+  const n = pins[0];
+  if (w.used.has(n)) {
+    toast(`That button is already ${capName(w.used.get(n))}. Press a different one, or skip.`, true);
+    return wizardStep();
+  }
+  const r = assignToCap(key, n, "add", { autoCopy: false });
+  if (!r.ok) { toast(r.msg, true); return wizardStep(); }
+  w.used.set(n, key); flash(key);
+  w.i++; await sleep(250); wizardStep();
+}
+function wizardSkip() { stopListening(); if (!state.wizard) return; state.wizard.i++; wizardStep(); }
+function wizardBack() {
+  stopListening(); const w = state.wizard; if (!w || w.i === 0) return;
+  w.i--; const key = w.order[w.i];
+  for (const [n, k] of w.used) if (k === key) { w.used.delete(n); setPin(n, { action: ACT.NONE }); }
+  wizardStep();
+}
+function finishWizard() {
+  stopListening();
+  const set = state.wizard ? state.wizard.used.size : 0;
+  state.wizard = null; state.mode = "idle"; state.sel = null; render();
+  toast(`Guided setup done: ${set} button${set === 1 ? "" : "s"} set. Press Save to controller to keep them.`);
+}
+
+/* ================= button test ================= */
+async function startTest() {
+  state.detect = null;
+  stopListening(); state.editing = false; state.mode = "test"; state.sel = null; state.lastTest = null; render();
+  while (state.mode === "test") {
+    const pins = await waitForPress();
+    if (state.mode !== "test" || !pins) break;
+    const n = pins[0], code = actionOf(state.doc, keyOf(n)), fn = CODE_TO_FN[code];
+    state.lastTest = { n, code };
+    if (fn && ACT[fn] > 0) for (const k of capKeysForPin(n)) state.tested.add(k);
+    render(); flashPin(n);
+  }
+}
+
+/* ================= save / restart / backups ================= */
+async function save() {
+  if (!changedPins().length) return;
+  stopListening();
+  state.mode = "saving"; render();
+  try {
+    if (!state.backedUp) {
+      await fetch("/app/backup?label=before-changes", { method: "POST", body: JSON.stringify(state.original) });
+      state.backedUp = true;
+    }
+    await api("setPinMappings", { body: state.doc, timeout: 8000 });
+    await sleep(500);
+    const check = await api("getPinMappings", { timeout: 5000 });
+    const wrong = pinKeys().filter(k => !locked(actionOf(state.doc, k)) && actionOf(check, k) !== actionOf(state.doc, k));
+    state.original = clone(check); state.doc = clone(check);
+    if (wrong.length) toast(`Saved, but ${wrong.length} pin${wrong.length > 1 ? "s" : ""} didn't take (${wrong.map(pinNum).join(", ")}). They may be used by an add-on.`, true);
+    else toast("Saved to controller. Press Finish and use controller when you're done.");
+  } catch (e) {
+    toast(e.offline ? "Couldn't reach the controller, so nothing was saved. Check the cable and that it's still in setup mode." : `Save failed: ${e.message}`, true);
+    if (e.offline) goOffline();
+  }
+  state.mode = "idle"; render();
+}
+async function restart() {
+  if (changedPins().length && !confirm("You have changes that aren't saved. Restart anyway and lose them?")) return;
+  stopListening();
+  try { await api("reboot", { body: { bootMode: 0 }, timeout: 3000 }); } catch {}
+  state.online = false; state.original = state.doc = null;
+  toast("Controller restarted as a normal controller. To remap again, plug it in while holding Start.");
+  render();
+}
+async function openBackups() {
+  const list = $("#bkList"); list.replaceChildren();
+  $("#bkDir").textContent = "Saved in: " + (state.info.backupDir || "");
+  let items = [];
+  try { items = await (await fetch("/app/backups")).json(); } catch {}
+  if (!items.length) list.append(el("p", { text: "No backups yet." }));
+  for (const it of items) {
+    list.append(el("button", { class: "btn", onclick: () => loadBackup(it.name) },
+      it.name.replace(/\.json$/, "")));
+  }
+  $("#backupDlg").showModal();
+}
+async function loadBackup(name) {
+  try {
+    const data = await (await fetch("/app/backup?name=" + encodeURIComponent(name))).json();
+    const next = clone(state.doc);
+    for (const k of pinKeys()) if (data[k] && !locked(actionOf(state.doc, k)) && !locked(Number(data[k].action))) next[k] = data[k];
+    state.doc = next; $("#backupDlg").close(); render();
+    toast("Backup loaded. Press Save to controller to put it back.");
+  } catch { toast("That backup file couldn't be read.", true); }
+}
+
+/* ================= connection ================= */
+async function connectLoop() {
+  for (;;) {
+    if (!state.online) {
+      try {
+        const fw = await api("getFirmwareVersion", { timeout: 2500 });
+        const pm = await api("getPinMappings", { timeout: 5000 });
+        state.fw = fw; state.original = clone(pm); state.doc = clone(pm); state.online = true;
+        state.backedUp = false; state.tested.clear();
+        if (!state.labelsChosen) {
+          try {
+            const g = await api("getGamepadOptions", { timeout: 3000 });
+            const m = Number(g.inputMode);
+            state.labels = [1, 15, 19].includes(m) ? "switch" : [2, 4, 13].includes(m) ? "ps" : m === 0 || m === 5 ? "xinput" : "gp2040";
+          } catch {}
+        }
+        render();
+      } catch {}
+    }
+    await sleep(2000);
+  }
+}
+function goOffline() {
+  stopListening();
+  state.online = false; state.mode = "idle"; state.wizard = null;
+  render();
+  toast("Lost the controller. Plug it back in while holding Start (S2); any unsaved changes are kept until then.", true);
+}
+
+/* ================= feedback ================= */
+let toastT;
+function toast(msg, bad = false) {
+  const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = "", bad ? 7000 : 4500);
+}
+function flash(key) {
+  const g = document.querySelector(`.cap[data-key="${key}"]`); if (!g) return;
+  g.classList.add("flash"); setTimeout(() => g.classList.remove("flash"), 450);
+}
+function flashPin(n) { for (const k of capKeysForPin(n)) flash(k); }
+
+/* ================= rendering ================= */
+function render() {
+  // header
+  const st = $("#status");
+  st.classList.toggle("on", state.online);
+  st.title = state.online ? `Firmware ${state.fw?.version || "unknown"}` : "";
+  $("#statusText").textContent = state.online
+    ? `Connected: ${state.fw?.boardConfigLabel || state.fw?.boardConfig || "GP2040-CE"}`
+    : "Not connected";
+  $("#labelBtns").replaceChildren(...Object.entries(LABELS).map(([k, v]) =>
+    el("button", { "aria-pressed": String(state.labels === k), onclick: () => { state.labels = k; state.labelsChosen = true; localSet("labels", k); render(); } }, v.name)));
+  for (const b of $("#layoutBtns").children) b.setAttribute("aria-pressed", String(!activePad() && b.dataset.layout === state.layout));
+
+  const main = $("#main");
+  if (state.view === "gallery") {
+    $("#footer").hidden = true;
+    main.replaceChildren(galleryView());
+    return;
+  }
+  if (!state.online || !state.doc) {
+    $("#footer").hidden = true;
+    main.replaceChildren(connectScreen());
+    return;
+  }
+  $("#footer").hidden = false;
+  const stage = el("section", { class: "stage", "aria-label": "Controller" },
+    el("div", { class: "toolbar" },
+      activePad()
+        ? el("span", { class: "padname" }, el("b", { text: activePad().name }))
+        : el("span", { text: state.editing ? "Drag buttons to match your controller" : "Picture doesn't match your controller?" }),
+      el("div", { class: "spacer" }),
+      activePad() && !state.editing ? el("button", { class: "btn quiet", text: "Update this pad's buttons", title: "Store the buttons shown now in this pad", onclick: updatePadButtons }) : null,
+      state.editing ? null : el("button", { class: "btn", text: "My pads", onclick: openGallery }),
+      el("button", { class: "btn" + (state.editing ? " primary" : ""), "aria-pressed": String(state.editing),
+        text: state.editing ? "Done arranging" : "Arrange picture", onclick: () => state.editing ? stopEditing() : startEditing() })),
+    panelSvg());
+  if (state.info.demo) stage.append(demoStrip());
+  main.replaceChildren(stage, state.editing ? editPanel() : sidePanel());
+
+  const n = changedPins().length;
+  $("#changes").innerHTML = n ? `<b>${n}</b> pin${n > 1 ? "s" : ""} changed, not saved yet` : "No unsaved changes";
+  $("#undoBtn").hidden = !n;
+  $("#saveBtn").disabled = !n || state.mode === "saving" || state.mode === "wizard";
+  $("#saveBtn").textContent = state.mode === "saving" ? "Saving…" : "Save to controller";
+  ensureDetect();
+}
+
+function connectScreen() {
+  return el("section", { class: "connect" }, el("div", { class: "connect-card" },
+    el("h1", { text: "Plug in your controller in setup mode" }),
+    el("ol", {},
+      el("li", { text: "Unplug the controller." }),
+      el("li", {}, "Hold the ", el("b", { text: "Start" }), " button (S2) and plug it into this PC. Keep holding for a second."),
+      el("li", { text: "Let go. If it has a screen, it shows a web address. This app connects by itself." })),
+    el("div", { class: "waiting" }, el("span", { class: "spinner", "aria-hidden": "true" }), "Waiting for the controller…"),
+    state.pads.length ? el("div", { class: "actions" }, el("button", { class: "btn", text: `See my pads (${state.pads.length})`, onclick: openGallery })) : null,
+    el("p", { class: "hint", text: "Nothing changes on your controller until you press Save. If it never connects, open http://192.168.7.1 in a browser: if that page doesn't load either, the controller isn't in setup mode yet." })));
+}
+
+function cap(key, { x, y, r }) {
+  const fn = fnOf(key), pins = capPins(key);
+  const isDir = !!DIR_TEXT[fn] || fn.startsWith("DDI");
+  const small = r < 24;
+  const cls = ["cap", isDir ? "dir" : "", pins.length ? "" : "unset",
+    state.sel === key ? "sel" : "", state.sel === key && (state.mode === "listen" || state.mode === "wizard") ? "listening" : "",
+    state.tested.has(key) ? "tested" : "", state.editing && state.editSel === key ? "picked" : "",
+    state.detect && state.mode === "idle" && pins.includes(state.detect.n) ? "detected" : ""].filter(Boolean).join(" ");
+  const name = fnName(fn);
+  const text = ARROWS[fn] || EXTRA_SHORT[fn] || name;
+  const k = r / 38;  // scale text with the button size
+  const fs = Math.round((isDir ? 26 : text.length <= 2 ? 24 : text.length <= 4 ? 19 : text.length <= 6 ? 15 : 12) * Math.max(k, .8));
+  const gpText = pins.length ? `GPIO ${pins.join(", ")}` : "Not set";
+  const label = state.editing
+    ? `${capName(key)}. Use the arrow keys to move it.`
+    : `${capName(key)}: ${pins.length ? "GPIO " + pins.join(", ") : "not set"}. Press to change.`;
+  const g = el("g", { class: cls, "data-key": key, tabindex: 0, role: "button", "aria-label": label,
+      onclick: () => { if (!state.editing) onCap(key); },
+      onkeydown: e => {
+        if (state.editing) return editKey(e, key);
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onCap(key); }
+      } },
+    el("circle", { class: "ring", cx: x, cy: y, r: r + 6 }),
+    el("circle", { class: "face", cx: x, cy: y, r }),
+    small ? null : el("text", { class: "lbl", x, y, "font-size": fs, text }),
+    small ? el("text", { class: "etch", x, y: y + r + 22, "text-anchor": "middle", text: EXTRA_SHORT[fn] || name }) : null,
+    el("text", { class: "gp", x, y: y + r + (small ? 38 : 24), text: gpText }),
+    el("circle", { class: "tick", cx: x + r * .72, cy: y - r * .72, r: 8 }));
+  return g;
+}
+
+function panelSvg() {
+  const L = curLayout();
+  const svg = el("svg", { id: "panel", viewBox: "0 0 1000 560", role: "group", class: state.editing ? "editing" : null,
+      "aria-label": state.editing ? "Controller picture. Drag buttons to move them." : "Controller layout. Pick a button to change it." },
+    el("rect", { class: "plate", x: 10, y: 10, width: 980, height: 540, rx: 34 }),
+    ...[[44, 44], [956, 44], [44, 516], [956, 516]].map(([x, y]) => el("circle", { class: "screw", cx: x, cy: y, r: 9 })));
+  if (L.lever) {
+    const { x: lx, y: ly } = L.lever;
+    svg.append(el("g", { class: "lever" + (state.editing && state.editSel === "lever" ? " picked" : ""), "data-key": "lever",
+        tabindex: state.editing ? 0 : null, role: state.editing ? "button" : null, "aria-label": state.editing ? "Lever. Use the arrow keys to move it." : null,
+        onkeydown: e => { if (state.editing) editKey(e, "lever"); } },
+      el("rect", { class: "lever-gate", x: lx - 64, y: ly - 64, width: 128, height: 128, rx: 22 }),
+      el("circle", { class: "lever-ball", cx: lx, cy: ly, r: 34 })));
+  }
+  for (const key of orderedKeys(L)) svg.append(cap(key, L.items[key]));
+  if (state.editing) enableDrag(svg);
+  return svg;
+}
+
+/* ================= picture editor ================= */
+let saveLayoutsT;
+function saveLayouts() {
+  const pad = activePad();
+  if (pad) { pad.updated = Date.now(); return savePads(); }
+  clearTimeout(saveLayoutsT);
+  saveLayoutsT = setTimeout(() => fetch("/app/layouts", { method: "POST", body: JSON.stringify(state.layouts) }).catch(() => {}), 400);
+}
+async function loadLayouts() {
+  try {
+    const saved = (await (await fetch("/app/layouts")).json()) || {};
+    for (const name of ["leverless", "stick"]) {
+      const s = saved[name];
+      if (s && s.items && typeof s.items === "object") {
+        const items = {};
+        for (const [key, it] of Object.entries(s.items))
+          if (validKey(key) && it && [it.x, it.y, it.r].every(Number.isFinite))
+            items[key] = { x: it.x, y: it.y, r: it.r, ...(isCopy(key) && Number.isInteger(it.pin) ? { pin: it.pin } : {}) };
+        const lever = s.lever && Number.isFinite(s.lever.x) ? { x: s.lever.x, y: s.lever.y } : null;
+        state.layouts[name] = { items, lever };
+      }
+    }
+  } catch {}
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function placeItem(key, x, y) {
+  const L = curLayout();
+  const it = key === "lever" ? L.lever : L.items[key];
+  const pad = key === "lever" ? 70 : it.r + 8;
+  it.x = Math.round(clamp(x, PLATE.x0 + pad, PLATE.x1 - pad));
+  it.y = Math.round(clamp(y, PLATE.y0 + pad, PLATE.y1 - pad - (key === "lever" ? 0 : 24)));
+}
+function startEditing() {
+  state.detect = null;
+  stopListening();
+  if (state.mode === "wizard") return toast("Finish or stop guided setup first.", true);
+  state.mode = "idle"; state.sel = null; state.editing = true; state.editSel = null; render();
+}
+function stopEditing() { state.editing = false; state.editSel = null; saveLayouts(); render(); }
+
+function enableDrag(svg) {
+  let drag = null;
+  const toSvg = e => { const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse()); return p; };
+  svg.addEventListener("pointerdown", e => {
+    const g = e.target.closest("[data-key]"); if (!g) { state.editSel = null; render(); return; }
+    const key = g.dataset.key, L = curLayout();
+    const it = key === "lever" ? L.lever : L.items[key];
+    const p = toSvg(e);
+    drag = { key, g, id: e.pointerId, dx: p.x - it.x, dy: p.y - it.y, sx: it.x, sy: it.y, moved: false };
+    svg.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const p = toSvg(e);
+    placeItem(drag.key, p.x - drag.dx, p.y - drag.dy);
+    const L = curLayout(), it = drag.key === "lever" ? L.lever : L.items[drag.key];
+    if (Math.abs(it.x - drag.sx) + Math.abs(it.y - drag.sy) > 2) drag.moved = true;
+    drag.g.setAttribute("transform", `translate(${it.x - drag.sx} ${it.y - drag.sy})`);
+    // the lever's direction buttons travel with it
+    if (drag.key === "lever" && !e.shiftKey) {
+      for (const fn of ["Up", "Down", "Left", "Right"]) {
+        const d = svg.querySelector(`.cap[data-key="${fn}"]`);
+        if (d) d.setAttribute("transform", `translate(${it.x - drag.sx} ${it.y - drag.sy})`);
+      }
+    }
+  });
+  const end = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { key, sx, sy } = drag;
+    const L = curLayout(), it = key === "lever" ? L.lever : L.items[key];
+    if (key === "lever" && !e.shiftKey) {
+      for (const fn of ["Up", "Down", "Left", "Right"]) if (L.items[fn]) { L.items[fn].x += it.x - sx; L.items[fn].y += it.y - sy; }
+    }
+    state.editSel = key; drag = null;
+    saveLayouts(); render();
+    const back = document.querySelector(`#panel [data-key="${key}"]`); if (back) back.focus({ preventScroll: true });
+  };
+  svg.addEventListener("pointerup", end);
+  svg.addEventListener("pointercancel", end);
+}
+function editKey(e, key) {
+  const step = e.shiftKey ? 20 : 4;
+  const mv = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+  if (e.key === "Delete" || e.key === "Backspace") { if (key !== "lever") { e.preventDefault(); removeFromPicture(key); } return; }
+  if (!mv) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); state.editSel = key; render(); refocus(key); } return; }
+  e.preventDefault();
+  const L = curLayout(), it = key === "lever" ? L.lever : L.items[key];
+  const ox = it.x, oy = it.y;
+  placeItem(key, it.x + mv[0], it.y + mv[1]);
+  if (key === "lever") for (const fn of ["Up", "Down", "Left", "Right"]) if (L.items[fn]) { L.items[fn].x += it.x - ox; L.items[fn].y += it.y - oy; }
+  state.editSel = key; saveLayouts(); render(); refocus(key);
+}
+function refocus(key) { const n = document.querySelector(`#panel [data-key="${key}"]`); if (n) n.focus({ preventScroll: true }); }
+function removeFromPicture(key) {
+  const name = capName(key);
+  delete curLayout().items[key]; state.editSel = null; saveLayouts(); render();
+  toast(`${name} is off the picture. It still works on your controller; add it back any time.`);
+}
+function addCopyFromEditor(key) {
+  const fn = fnOf(key);
+  const k = addCap(fn);
+  state.editSel = k; render(); refocus(k);
+  const p = capPins(k)[0];
+  toast(p != null ? `Added another ${fnName(fn)}; it shows GPIO ${p}.` : `Added another ${fnName(fn)}. When you're done arranging, click it and press its real button.`);
+}
+function freeSpot(r) {
+  const taken = [...Object.values(curLayout().items), ...(curLayout().lever ? [{ ...curLayout().lever, r: 70 }] : [])];
+  for (const y of [470, 120, 400, 330, 260, 190]) for (let x = 90; x <= 910; x += 20) {
+    if (taken.every(t => Math.hypot(t.x - x, t.y - y) > t.r + r + 34)) return [x, y];
+  }
+  return [500, 470];
+}
+function addToPicture(fn) {
+  const L = curLayout();
+  const r = capSize(fn);
+  const [x, y] = freeSpot(r);
+  L.items[fn] = { x, y, r };
+  placeItem(fn, x, y);
+  state.editSel = fn; saveLayouts(); render(); refocus(fn);
+}
+function setSize(fn, r) {
+  const it = curLayout().items[fn]; it.r = r; placeItem(fn, it.x, it.y); saveLayouts(); render(); refocus(fn);
+}
+function toggleLever() {
+  const L = curLayout();
+  L.lever = L.lever ? null : { x: 240, y: 290 };
+  if (L.lever) placeItem("lever", 240, 290);
+  state.editSel = L.lever ? "lever" : null; saveLayouts(); render();
+}
+function resetLayout() {
+  const pad = activePad(), base = pad ? pad.base : state.layout;
+  const name = base === "stick" ? "Fightstick" : "Leverless";
+  if (!confirm(`Put every button back where it starts on the ${name} picture?`)) return;
+  if (pad) pad.layout = defaultLayout(base); else state.layouts[base] = defaultLayout(base);
+  state.editSel = null; saveLayouts(); render();
+}
+
+function editPanel() {
+  const L = curLayout(), key = state.editSel;
+  const side = el("aside", { class: "side", "aria-live": "polite" },
+    el("h2", { text: "Arrange the picture" }),
+    el("p", { class: "big", text: "Drag the buttons so the picture looks like your controller." }),
+    el("p", { text: "This only changes the drawing. Your controller's buttons stay exactly as they are." }));
+  if (key && key !== "lever" && L.items[key]) {
+    const it = L.items[key];
+    side.append(el("div", { class: "listen" },
+      el("div", { class: "prompt", text: capName(key) }),
+      el("div", { class: "seg" }, el("span", { id: "sizeCap", text: "Size" }),
+        el("div", { class: "seg-btns", role: "group", "aria-labelledby": "sizeCap" },
+          SIZES.map(([n, r]) => el("button", { "aria-pressed": String(it.r === r), onclick: () => setSize(key, r), text: n })))),
+      el("p", { class: "progress", text: "Arrow keys nudge it; hold Shift to move further." }),
+      el("div", { class: "actions" },
+        el("button", { class: "btn", text: `Add another ${fnName(fnOf(key))}`, title: "For a controller with two buttons that do the same thing", onclick: () => addCopyFromEditor(key) }),
+        el("button", { class: "btn quiet", text: "Take off the picture", onclick: () => removeFromPicture(key) }))));
+  } else if (key === "lever") {
+    side.append(el("div", { class: "listen" },
+      el("div", { class: "prompt", text: "Lever" }),
+      el("p", { text: "The four direction buttons move with the lever. Hold Shift while dragging to move the lever on its own." }),
+      el("div", { class: "actions" }, el("button", { class: "btn quiet", text: "Take the lever off", onclick: toggleLever }))));
+  } else {
+    side.append(el("p", { text: "Click a button to change its size or take it off the picture." }));
+  }
+  const missing = MAIN_FNS.filter(fn => !L.items[fn]);
+  if (missing.length || !L.lever) {
+    side.append(el("div", {}, el("p", { text: "Add to the picture:" }),
+      el("div", { class: "actions", style: "margin-top:8px" },
+        missing.map(fn => el("button", { class: "btn", text: fnName(fn), onclick: () => addToPicture(fn) })),
+        L.lever ? null : el("button", { class: "btn", text: "Lever", onclick: toggleLever }))));
+  }
+  const more = el("div", { class: "more" }, el("h3", { text: "Add more buttons" }),
+    el("p", { text: "Other things a GP2040-CE button can do. Add one, then click it on the picture and press the button you want for it." }));
+  for (const [title, list] of EXTRA_GROUPS) {
+    const left = list.filter(([id]) => !L.items[id]);
+    if (!left.length) continue;
+    const det = el("details", { class: "addgroup" }, el("summary", { text: `${title} (${left.length})` }),
+      el("div", { class: "actions" }, left.map(([id, full]) => el("button", { class: "btn", text: full, onclick: () => addToPicture(id) }))));
+    if (localGet("addOpen." + title) === "1") det.open = true;
+    det.addEventListener("toggle", () => localSet("addOpen." + title, det.open ? "1" : "0"));
+    more.append(det);
+  }
+  side.append(more);
+  side.append(el("div", { class: "actions" },
+    el("button", { class: "btn primary", text: "Done arranging", onclick: stopEditing }),
+    el("button", { class: "btn quiet", text: "Reset picture", onclick: resetLayout })));
+  return side;
+}
+
+function onCap(key) {
+  if (state.editing || state.mode === "wizard" || state.mode === "saving") return;
+  if (state.detect && state.mode === "idle") return setDetected(key);
+  if (state.mode === "test") { state.mode = "idle"; stopListening(); }
+  if (state.mode === "listen" && state.sel === key) { cancelListen(); return; }
+  startListen(key);
+}
+function cancelListen() { stopListening(); state.mode = "idle"; state.sel = null; render(); }
+
+/* ================= auto-detect: press a button, see what it is ================= */
+let detecting = false;
+function canDetect() {
+  return state.autoDetect && state.online && !!state.doc && state.mode === "idle" && !state.editing && state.view === "main";
+}
+async function ensureDetect() {
+  if (detecting || state.listenCtl || !canDetect()) return;
+  detecting = true;
+  try {
+    const pins = await waitForPress();
+    if (!pins || !canDetect()) return;
+    const n = pins[0];
+    state.detect = { n, many: pins.length > 1 };
+  } finally { detecting = false; }
+  render();
+  if (state.detect) flashPin(state.detect.n);
+}
+function pauseDetect() { if (detecting) stopListening(); }
+function setAutoDetect(on) {
+  state.autoDetect = on; localSet("autoDetect", on ? "1" : "0");
+  if (!on) { state.detect = null; pauseDetect(); }
+  render();
+}
+function setDetected(key) {
+  const n = state.detect.n;
+  const r = key === "NONE" ? (setPin(n, { action: ACT.NONE }), { ok: true, msg: `GPIO ${n} now does nothing.` }) : assignToCap(key, n);
+  toast(r.msg, !r.ok);
+  if (r.ok) state.detect = null;
+  render();
+  if (r.ok && key !== "NONE") flashPin(n);
+}
+function detectPanel() {
+  const n = state.detect.n, code = actionOf(state.doc, keyOf(n)), fn = CODE_TO_FN[code];
+  const onPic = !fn || ACT[fn] <= 0 || capKeysForPin(n).length > 0;
+  const others = fn && ACT[fn] > 0 ? pinsFor(fn).filter(p => p !== n) : [];
+  const box = el("div", { class: "listen" },
+    el("div", { class: "progress", text: `You pressed GPIO ${n}` }),
+    el("div", { class: "prompt", text: locked(code) ? `GPIO ${n} is ${actionText(code).toLowerCase()}`
+      : code === ACT.NONE ? "This button doesn't do anything yet" : `It's ${actionText(code)}` }),
+    state.detect.many ? el("p", { text: "More than one button was held, so this is the first one." }) : null,
+    others.length ? el("p", { text: `${fnName(fn)} is also on GPIO ${others.join(", ")}.` }) : null,
+    !onPic ? el("p", {}, `This button isn't on your picture. `,
+      el("button", { class: "btn quiet", style: "padding:0", text: "Add it", onclick: () => { addToPictureQuiet(fn, n); render(); } })) : null);
+  if (locked(code)) {
+    box.append(el("p", { text: "Pins used by add-ons (LEDs, a screen, etc.) can't be changed here." }));
+    return [box];
+  }
+  box.append(el("p", { class: "big", text: "To change it, click what it should be on the picture, or pick below." }),
+    el("p", { class: "progress", style: "margin-top:2px", text: "If that job is already on another button:" }), multiChoice(null));
+  const choices = el("div", { class: "actions choices" },
+    MAIN_FNS.map(f => el("button", { class: "btn" + (f === fn ? " current" : ""), "aria-pressed": String(f === fn), text: fnName(f), onclick: () => setDetected(f) })));
+  const more = el("details", { class: "addgroup" }, el("summary", { text: "More functions" }),
+    ...EXTRA_GROUPS.map(([title, list]) => el("div", {}, el("div", { class: "progress", text: title }),
+      el("div", { class: "actions" }, list.map(([id, full]) => el("button", { class: "btn" + (id === fn ? " current" : ""), text: full, onclick: () => setDetected(id) }))))));
+  if (fn && EXTRA_NAME[fn]) more.open = true;
+  box.append(choices, more,
+    el("div", { class: "actions" },
+      code !== ACT.NONE ? el("button", { class: "btn quiet", text: "Make it do nothing", onclick: () => setDetected("NONE") }) : null,
+      el("button", { class: "btn quiet", text: "Done", onclick: () => { state.detect = null; render(); } })));
+  return [box];
+}
+function addToPictureQuiet(fn, n) {
+  const key = addCap(fn, n);
+  toast(`Added ${capName(key)} to the picture. Use Arrange picture to move it.`);
+}
+
+function sidePanel() {
+  const side = el("aside", { class: "side", "aria-live": "polite" });
+  const m = state.mode;
+  if (m === "listen" && state.sel) {
+    const key = state.sel, fn = fnOf(key), pins = pinsFor(fn), mine = capPins(key);
+    const done = () => { stopListening(); state.mode = "idle"; state.sel = null; render(); };
+    side.append(
+      el("h2", { text: capName(key) }),
+      el("div", { class: "listen" },
+        el("div", { class: "prompt", text: isCopy(key) ? `Press the button this ${fnName(fn)} is on your controller`
+          : `Press the button you want to be ${fnName(fn)}` }),
+        el("p", { text: pins.length ? `Right now ${fnName(fn)} is on GPIO ${pins.join(", ")}.` : "It isn't on any button right now." }),
+        isCopy(key)
+          ? el("p", { class: "progress", text: mine.length ? `This picture button is GPIO ${mine[0]}. Pressing a different one moves it there.`
+              : `This is an extra ${fnName(fn)} button. The one you press becomes ${fnName(fn)} too.` })
+          : pins.length ? multiChoice(fn) : null,
+        pins.length > 1 ? el("div", { class: "actions pinchips" }, pins.map(p =>
+          el("button", { class: "btn quiet", title: `Stop GPIO ${p} being ${fnName(fn)}`, text: `Remove GPIO ${p}`, onclick: () => { removePinFrom(fn, p); done(); } }))) : null,
+        el("div", { class: "actions" },
+          el("button", { class: "btn", onclick: cancelListen, text: "Cancel" }),
+          pins.length ? el("button", { class: "btn quiet", text: pins.length > 1 ? `Turn off all ${fnName(fn)}` : `Turn off ${fnName(fn)}`, onclick: () => {
+            pins.forEach(p => setPin(p, { action: ACT.NONE })); done();
+            toast(`${fnName(fn)} is no longer on any button.`);
+          } }) : null)));
+  } else if (m === "wizard" && state.wizard) {
+    const w = state.wizard, wkey = w.order[w.i], fn = fnOf(wkey);
+    side.append(
+      el("h2", { text: "Guided setup" }),
+      el("div", { class: "listen" },
+        el("div", { class: "progress", text: `Button ${w.i + 1} of ${w.order.length}` }),
+        el("div", { class: "prompt", text: isCopy(wkey) ? `Press your other ${fnName(fn)} button` : `Press the button you want to be ${fnName(fn)}` }),
+        WIZARD_OPTIONAL.has(fn) && !isCopy(wkey) ? el("p", { text: "Most people don't need this one. Skip it if you don't have a spare button." }) : null,
+        el("div", { class: "actions" },
+          el("button", { class: "btn", onclick: wizardSkip, text: "Skip" }),
+          w.i ? el("button", { class: "btn quiet", onclick: wizardBack, text: "Back" }) : null,
+          el("button", { class: "btn quiet", onclick: finishWizard, text: "Stop here" }))),
+      el("p", { text: "Nothing is written to the controller until you press Save." }));
+  } else if (m === "test") {
+    const t = state.lastTest;
+    side.append(
+      el("h2", { text: "Test buttons" }),
+      el("div", { class: "listen" },
+        el("div", { class: "prompt", text: t
+          ? (CODE_TO_FN[t.code] && ACT[CODE_TO_FN[t.code]] > 0 ? `GPIO ${t.n} is ${fnFullName(CODE_TO_FN[t.code])}` : `GPIO ${t.n}: ${actionText(t.code)}`)
+          : "Press any button on your controller" }),
+        el("p", { text: "Each button lights up on the picture and gets a green tick once it's been tested. This shows your current, unsaved layout." }),
+        el("div", { class: "actions" }, el("button", { class: "btn", text: "Done testing", onclick: () => { stopListening(); state.mode = "idle"; render(); } }))));
+  } else if (state.detect) {
+    side.append(el("h2", { text: "Button found" }), ...detectPanel());
+  } else {
+    side.append(
+      el("h2", { text: "Change a button" }),
+      state.autoDetect
+        ? el("div", { class: "detecting" }, el("span", { class: "live", "aria-hidden": "true" }),
+            el("span", {}, el("b", { text: "Press any button on your controller" }), " to see its GPIO pin and what it does."))
+        : null,
+      el("p", { class: "big", text: state.autoDetect ? "Or click a button on the picture, then press the one you want it to be."
+        : "Click a button on the picture, then press the button on your controller you want it to be." }),
+      el("p", { text: "If that button already did something, the two swap places, so you never lose a button." }),
+      el("label", { class: "toggle" },
+        el("input", { type: "checkbox", checked: state.autoDetect, onchange: e => setAutoDetect(e.target.checked) }),
+        "Auto-detect button presses"),
+      el("label", { class: "toggle" },
+        el("input", { type: "checkbox", checked: state.multi === "add", onchange: e => setMulti(e.target.checked ? "add" : "swap") }),
+        "Let two buttons do the same thing (keep both instead of swapping)"),
+      el("div", { class: "actions" },
+        el("button", { class: "btn", text: "Guided setup", onclick: () => {
+          if (confirm("Guided setup asks you to press every button in turn and starts the layout fresh. Your current layout stays on the controller until you press Save. Start?")) startWizard();
+        } }),
+        el("button", { class: "btn", text: "Test buttons", onclick: startTest })));
+  }
+  side.append(wiringList());
+  return side;
+}
+
+function wiringList() {
+  const changed = new Set(changedPins());
+  const det = el("details", { class: "wiring" }, el("summary", { text: "Wiring list (all GPIO pins)" }));
+  if (localGet("wiringOpen") === "1") det.open = true;
+  det.addEventListener("toggle", () => localSet("wiringOpen", det.open ? "1" : "0"));
+  const grid = el("div", { class: "pins" });
+  const opts = ["NONE", "Up", "Down", "Left", "Right", "B1", "B2", "B3", "B4", "L1", "R1", "L2", "R2", "S1", "S2", "A1", "A2", "L3", "R3", "Turbo", "Fn"];
+  for (const k of pinKeys()) {
+    const n = pinNum(k), code = actionOf(state.doc, k);
+    grid.append(el("span", { class: "g" + (changed.has(k) ? " changed" : ""), text: `GPIO ${n}` }));
+    if (locked(code)) { grid.append(el("span", { class: "locked", text: actionText(code) })); continue; }
+    const sel = el("select", { "aria-label": `GPIO ${n} function`, onchange: e => {
+      const v = e.target.value;
+      if (v === "NONE") setPin(n, { action: ACT.NONE });
+      else if (v.startsWith("other:")) return;
+      else { const r = assign(v, n); toast(r.msg, !r.ok); }
+      render();
+    } });
+    if (!CODE_TO_FN[code]) sel.append(el("option", { value: "other:" + code, selected: true, text: actionText(code) }));
+    for (const o of opts) sel.append(el("option", { value: o, selected: ACT[o] === code, text: o === "NONE" ? "Not used" : fnFullName(o) }));
+    for (const [title, list] of EXTRA_GROUPS)
+      sel.append(el("optgroup", { label: title }, list.map(([id, full]) => el("option", { value: id, selected: ACT[id] === code, text: full }))));
+    grid.append(sel);
+  }
+  det.append(grid);
+  return det;
+}
+
+function demoStrip() {
+  const pins = pinKeys().map(pinNum).filter(n => !locked(actionOf(state.doc, keyOf(n))));
+  return el("div", { class: "demo" },
+    el("span", { text: "Demo mode: there's no real controller, so click a wire below to pretend you pressed the button on that GPIO pin." }),
+    el("div", { class: "chips" }, pins.map(n => el("button", { text: `GPIO ${n}`, onclick: () => fetch("/mock/press?pin=" + n) }))));
+}
+
+/* ================= saved pads + gallery ================= */
+const activePad = () => state.pads.find(p => p.id === state.activePad) || null;
+function setActivePad(id) { state.activePad = id; localSet("activePad", id || ""); }
+let savePadsT;
+function savePads() {
+  clearTimeout(savePadsT);
+  savePadsT = setTimeout(() => fetch("/app/pads", { method: "POST", body: JSON.stringify({ version: 1, pads: state.pads }) })
+    .catch(() => toast("Couldn't save your pads to disk.", true)), 300);
+}
+async function loadPads() {
+  try {
+    const data = await (await fetch("/app/pads")).json();
+    const list = Array.isArray(data?.pads) ? data.pads : [];
+    state.pads = list.filter(p => p && p.id && p.layout && p.layout.items).map(p => ({
+      id: String(p.id), name: String(p.name || "My pad").slice(0, 40), base: p.base === "stick" ? "stick" : "leverless",
+      layout: { items: p.layout.items, lever: p.layout.lever || null }, buttons: p.buttons || null,
+      labels: LABELS[p.labels] ? p.labels : null, board: p.board || "", updated: Number(p.updated) || 0 }));
+  } catch { state.pads = []; }
+  if (!activePad()) setActivePad(null);
+}
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function currentButtons() {
+  if (!state.doc) return null;
+  const out = {};
+  for (const k of pinKeys()) out[k] = clone(state.doc[k]);
+  return out;
+}
+function boardName() { return state.fw?.boardConfigLabel || state.fw?.boardConfig || ""; }
+
+function askName(title, hint, initial = "", okText = "Save") {
+  const dlg = $("#nameDlg");
+  $("#nameTitle").textContent = title; $("#nameHint").textContent = hint || "";
+  $("#nameOk").textContent = okText;
+  const input = $("#nameInput"); input.value = initial;
+  dlg.returnValue = "";
+  dlg.showModal(); input.select();
+  return new Promise(res => dlg.addEventListener("close", () => {
+    const v = input.value.trim();
+    res(dlg.returnValue === "ok" && v ? v.slice(0, 40) : null);
+  }, { once: true }));
+}
+
+function openGallery() { state.detect = null; stopListening(); state.mode = "idle"; state.sel = null; state.editing = false; state.view = "gallery"; render(); }
+function closeGallery() { state.view = "main"; render(); }
+
+async function saveCurrentAsPad() {
+  const hint = state.doc
+    ? "Saves this picture and the buttons shown right now, so you can bring them back later."
+    : "Saves this picture. Connect a controller to save its buttons too.";
+  const name = await askName("Save this pad", hint, activePad() ? activePad().name + " copy" : "");
+  if (!name) return;
+  const pad = { id: newId(), name, base: activePad()?.base || state.layout, layout: clone(curLayout()),
+    buttons: currentButtons(), labels: state.labels, board: boardName(), updated: Date.now() };
+  state.pads.unshift(pad); setActivePad(pad.id); savePads(); render();
+  toast(`Saved "${name}" to your pads.`);
+}
+async function newPadFrom(base) {
+  const name = await askName(`New ${base === "stick" ? "fightstick" : "leverless"} pad`, "Starts from a fresh picture. You can arrange it next.", "", "Create");
+  if (!name) return;
+  const pad = { id: newId(), name, base, layout: defaultLayout(base), buttons: currentButtons(),
+    labels: state.labels, board: boardName(), updated: Date.now() };
+  state.pads.unshift(pad); setActivePad(pad.id); savePads();
+  state.view = "main";
+  if (state.online && state.doc) startEditing(); else render();
+}
+function usePad(pad) {
+  setActivePad(pad.id);
+  if (pad.labels) { state.labels = pad.labels; state.labelsChosen = true; localSet("labels", pad.labels); }
+  state.view = "main"; render();
+  if (!state.online) toast(`Using "${pad.name}". Plug in your controller in setup mode to start remapping.`);
+}
+function loadPadButtons(pad) {
+  if (!state.doc || !pad.buttons) return;
+  if (pad.board && boardName() && pad.board !== boardName() &&
+      !confirm(`"${pad.name}" was saved from a different board (${pad.board}). Its GPIO numbers might not match this controller (${boardName()}). Load its buttons anyway?`)) return;
+  let n = 0;
+  for (const k of pinKeys()) {
+    const b = pad.buttons[k];
+    if (!b || locked(actionOf(state.doc, k)) || locked(Number(b.action))) continue;
+    if (actionOf(state.doc, k) !== Number(b.action)) n++;
+    state.doc[k] = { action: Number(b.action), customButtonMask: b.customButtonMask || 0, customDpadMask: b.customDpadMask || 0 };
+  }
+  setActivePad(pad.id); state.view = "main"; render();
+  toast(n ? `Loaded the buttons from "${pad.name}" (${n} pin${n > 1 ? "s" : ""} different). Press Save to controller to put them on.`
+          : `This controller already matches "${pad.name}".`);
+}
+function updatePadButtons() {
+  const pad = activePad(); if (!pad) return;
+  if (!state.doc) return toast("Connect a controller to store its buttons.", true);
+  pad.buttons = currentButtons(); pad.labels = state.labels; pad.board = boardName(); pad.updated = Date.now();
+  savePads(); toast(`"${pad.name}" now has the buttons shown here.`);
+}
+async function renamePad(pad) {
+  const name = await askName("Rename pad", "", pad.name, "Rename");
+  if (!name) return;
+  pad.name = name; pad.updated = Date.now(); savePads(); render();
+}
+function duplicatePad(pad) {
+  const copy = { ...clone(pad), id: newId(), name: (pad.name + " copy").slice(0, 40), updated: Date.now() };
+  state.pads.splice(state.pads.indexOf(pad) + 1, 0, copy); savePads(); render();
+}
+function deletePad(pad) {
+  if (!confirm(`Delete "${pad.name}" from your pads? This doesn't change your controller.`)) return;
+  state.pads = state.pads.filter(p => p !== pad);
+  if (state.activePad === pad.id) setActivePad(null);
+  savePads(); render(); toast(`Deleted "${pad.name}".`);
+}
+
+/* ---- sharing ---- */
+const PAD_FORMAT = "gp2040-remap-pad";
+async function exportPad(pad) {
+  const file = { format: PAD_FORMAT, version: 1, exported: new Date().toISOString(),
+    pad: { name: pad.name, base: pad.base, layout: pad.layout, buttons: pad.buttons, labels: pad.labels, board: pad.board } };
+  try {
+    const r = await fetch("/app/export?name=" + encodeURIComponent(pad.name), { method: "POST", body: JSON.stringify(file, null, 1) });
+    if (!r.ok) throw new Error(await r.text());
+    const { file: fname } = await r.json();
+    toast(`Saved "${fname}" in Documents\\GP2040 Remap pads. Send that file to your friend; they press Import pad to add it.`);
+  } catch (e) { toast(`Couldn't export: ${e.message}`, true); }
+}
+function readPadFile(text) {
+  let data; try { data = JSON.parse(text); } catch { throw new Error("That isn't a pad file."); }
+  const p = data && data.format === PAD_FORMAT ? data.pad : null;
+  if (!p || !p.layout || typeof p.layout.items !== "object") throw new Error("That isn't a GP2040 Remap pad file.");
+  const items = {};
+  for (const [key, it] of Object.entries(p.layout.items))
+    if (validKey(key) && it && [it.x, it.y, it.r].every(Number.isFinite))
+      items[key] = { x: clamp(it.x, 0, 1000), y: clamp(it.y, 0, 560), r: clamp(it.r, 10, 60),
+        ...(isCopy(key) && Number.isInteger(it.pin) && it.pin >= 0 && it.pin < 48 ? { pin: it.pin } : {}) };
+  const lv = p.layout.lever;
+  const lever = lv && Number.isFinite(lv.x) && Number.isFinite(lv.y) ? { x: clamp(lv.x, 0, 1000), y: clamp(lv.y, 0, 560) } : null;
+  let buttons = null;
+  if (p.buttons && typeof p.buttons === "object") {
+    buttons = {};
+    for (const [k, b] of Object.entries(p.buttons))
+      if (/^pin\d\d$/.test(k) && b && Number.isInteger(Number(b.action)))
+        buttons[k] = { action: Number(b.action), customButtonMask: Number(b.customButtonMask) || 0, customDpadMask: Number(b.customDpadMask) || 0 };
+  }
+  let name = String(p.name || "Shared pad").slice(0, 40);
+  const taken = new Set(state.pads.map(x => x.name));
+  for (let i = 2; taken.has(name); i++) name = `${String(p.name || "Shared pad").slice(0, 34)} (${i})`;
+  return { id: newId(), name, base: p.base === "stick" ? "stick" : "leverless", layout: { items, lever }, buttons,
+    labels: LABELS[p.labels] ? p.labels : null, board: String(p.board || "").slice(0, 80), updated: Date.now() };
+}
+async function importPadFiles(files) {
+  let added = 0;
+  for (const f of files) {
+    try {
+      if (f.size > 1 << 20) throw new Error("That file is too big to be a pad.");
+      state.pads.unshift(readPadFile(await f.text())); added++;
+    } catch (e) { toast(`${f.name}: ${e.message}`, true); }
+  }
+  if (added) {
+    savePads(); render();
+    toast(added === 1 ? `Added "${state.pads[0].name}". Press Use to see it, or Load its buttons to try it on your controller.` : `Added ${added} pads.`);
+  }
+}
+function pickPadFile() {
+  const input = el("input", { type: "file", accept: ".gp2040pad,.json", multiple: true, style: "display:none" });
+  input.addEventListener("change", () => { importPadFiles([...input.files]); input.remove(); });
+  document.body.append(input); input.click();
+}
+
+function thumbSvg(layout) {
+  const svg = el("svg", { class: "thumb", viewBox: "0 0 1000 560", "aria-hidden": "true" },
+    el("rect", { class: "t-plate", x: 0, y: 0, width: 1000, height: 560, rx: 40 }));
+  if (layout.lever) {
+    const { x, y } = layout.lever;
+    svg.append(el("rect", { class: "t-gate", x: x - 64, y: y - 64, width: 128, height: 128, rx: 22 }), el("circle", { class: "t-ball", cx: x, cy: y, r: 34 }));
+  }
+  for (const [key, it] of Object.entries(layout.items))
+    svg.append(el("circle", { class: DIR_TEXT[fnOf(key)] || fnOf(key).startsWith("DDI") ? "t-dir" : "t-cap", cx: it.x, cy: it.y, r: it.r }));
+  return svg;
+}
+function fmtDate(t) {
+  if (!t) return "";
+  try { return new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); } catch { return ""; }
+}
+
+function galleryView() {
+  const online = state.online && state.doc;
+  const head = el("div", { class: "gallery-head" },
+    el("h1", { text: "My pads" }),
+    el("div", { class: "spacer" }),
+    el("button", { class: "btn", text: "Import pad", onclick: pickPadFile }),
+    el("button", { class: "btn primary", text: "Save current pad", onclick: saveCurrentAsPad }),
+    el("button", { class: "btn", text: online ? "Back to remapping" : "Back", onclick: closeGallery }));
+  const cards = el("div", { class: "cards" });
+  for (const pad of state.pads) {
+    const isActive = pad.id === state.activePad;
+    const meta = [pad.base === "stick" ? "Fightstick" : "Leverless",
+      pad.buttons ? "buttons saved" : "picture only",
+      fmtDate(pad.updated)].filter(Boolean).join(" · ");
+    const thumb = thumbSvg(pad.layout);
+    thumb.addEventListener("click", () => usePad(pad));
+    cards.append(el("article", { class: "card" + (isActive ? " active" : ""), "aria-label": pad.name },
+      thumb,
+      el("div", {}, el("h2", {}, pad.name, isActive ? el("span", { class: "badge", text: "In use" }) : null),
+        el("div", { class: "meta", text: meta }),
+        pad.board ? el("div", { class: "meta", text: pad.board }) : null),
+      el("div", { class: "actions" },
+        el("button", { class: "btn" + (isActive ? "" : " primary"), text: isActive ? "Open" : "Use", onclick: () => usePad(pad) }),
+        online && pad.buttons ? el("button", { class: "btn", text: "Load its buttons", onclick: () => loadPadButtons(pad) }) : null),
+      el("div", { class: "actions" },
+        el("button", { class: "btn quiet", text: "Share", title: "Export to a file you can send to a friend", onclick: () => exportPad(pad) }),
+        el("button", { class: "btn quiet", text: "Rename", onclick: () => renamePad(pad) }),
+        el("button", { class: "btn quiet", text: "Duplicate", onclick: () => duplicatePad(pad) }),
+        el("button", { class: "btn quiet", text: "Delete", onclick: () => deletePad(pad) }))));
+  }
+  cards.append(el("div", { class: "card new" },
+    el("h2", { text: "Start a new pad" }),
+    el("p", { text: "Pick a starting picture, then drag the buttons to match." }),
+    el("div", { class: "actions", style: "justify-content:center" },
+      el("button", { class: "btn", text: "Leverless", onclick: () => newPadFrom("leverless") }),
+      el("button", { class: "btn", text: "Fightstick", onclick: () => newPadFrom("stick") }))));
+  const intro = state.pads.length ? null
+    : el("p", { class: "big", style: "margin:0;color:var(--ink-soft);max-width:60ch", text: "Save each of your controllers here with its own picture and buttons. Pick one to switch to it, or load its buttons onto the controller you have plugged in." });
+  const hint = el("p", { class: "progress", style: "margin:0", text: "Got a pad file from a friend? Press Import pad, or drop the file anywhere here." });
+  const sec = el("section", { class: "gallery", "aria-label": "My pads" }, head, intro, cards, hint);
+  sec.addEventListener("dragover", e => { e.preventDefault(); sec.classList.add("drop"); });
+  sec.addEventListener("dragleave", e => { if (e.target === sec) sec.classList.remove("drop"); });
+  sec.addEventListener("drop", e => { e.preventDefault(); sec.classList.remove("drop"); importPadFiles([...e.dataTransfer.files]); });
+  return sec;
+}
+
+/* ================= wiring up ================= */
+$("#layoutBtns").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (state.mode === "wizard") return toast("Finish or stop guided setup before switching layouts.", true);
+  state.layout = b.dataset.layout; state.editSel = null; setActivePad(null); render();
+  localSet("layout", state.layout);
+});
+$("#saveBtn").onclick = save;
+$("#undoBtn").onclick = () => { if (confirm("Undo all unsaved changes?")) { stopListening(); state.doc = clone(state.original); state.mode = "idle"; state.wizard = null; state.sel = null; render(); } };
+$("#restartBtn").onclick = restart;
+$("#backupsBtn").onclick = openBackups;
+$("#bkClose").onclick = () => $("#backupDlg").close();
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (state.view === "gallery") { closeGallery(); return; }
+  if (state.editing) { if (state.editSel) { state.editSel = null; render(); } else stopEditing(); return; }
+  if (state.detect && state.mode === "idle") { state.detect = null; render(); return; }
+  if (state.mode === "listen") cancelListen();
+  else if (state.mode === "test") { stopListening(); state.mode = "idle"; render(); }
+});
+window.addEventListener("beforeunload", e => { if (state.online && changedPins().length) { e.preventDefault(); e.returnValue = ""; } });
+
+(async () => {
+  try { state.info = await (await fetch("/app/info")).json(); } catch {}
+  await loadLayouts();
+  await loadPads();
+  render();
+  connectLoop();
+  setInterval(() => fetch("/app/ping").catch(() => {}), 3000);  // lets the app quit when this window closes
+})();
+</script>
+</body>
+</html>
